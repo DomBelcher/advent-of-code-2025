@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs};
+use std::{collections::HashSet, fs, cmp::{min, max}};
 
 const FILENAME: &str = "./input.txt";
 
@@ -47,12 +47,20 @@ fn parse_input () -> (Vec<(i64, i64)>, Vec<i64>) {
     return (ranges, ingredients);
 }
 
-fn is_within (index: i64, range: (i64, i64)) -> bool {
-    return index >= range.0 && index <= range.1;
+fn is_within (value: i64, range: (i64, i64)) -> bool {
+    return range.0 <= value && value <= range.1;
 }
 
-fn is_subrange(range_1: (i64, i64), range_2: (i64, i64)) -> bool {
-    return is_within(range_1.0, range_2) && is_within(range_1.1, range_2);
+fn intersects (range_1: (i64, i64), range_2: (i64, i64)) -> bool {
+    return is_within(range_1.0, range_2) || is_within(range_1.1, range_2) || is_within(range_2.0, range_1) || is_within(range_2.1, range_1)
+}
+
+fn overlap (range_1: (i64, i64), range_2: (i64, i64)) -> Option<(i64, i64)> {
+    if !intersects(range_1, range_2) {
+        return None
+    }
+
+    return Some((min(range_1.0, range_2.0), max(range_1.1, range_2.1)))
 }
 
 struct RangeSet {
@@ -82,179 +90,24 @@ impl RangeSet {
     }
 
     fn insert (&mut self, candidate_range: (i64, i64)) {
+        let mut possible_range = candidate_range;
         let mut deletions = vec![];
-        let mut insertions = vec![];
-        let mut is_unique= true;
 
         for existing_range in self.ranges.iter() {
-            if is_subrange(candidate_range, *existing_range){
-                is_unique = false;
-                break
-            }
-
-            if is_subrange(*existing_range, candidate_range) {
+            let union = overlap(possible_range, *existing_range);
+            if union.is_some() {
                 deletions.push(existing_range.clone());
-                continue;
+                possible_range = union.unwrap();
             }
-
-            if is_within(candidate_range.0, *existing_range) {
-                let mut found_end = false;
-                let possible_range = (existing_range.0, candidate_range.1);
-                is_unique = false;
-
-                for existing_range_1 in self.ranges.iter() {
-                    if is_within(candidate_range.1, *existing_range_1) {
-
-                        deletions.push(existing_range.clone());
-                        deletions.push(existing_range_1.clone());
-                        insertions.push((existing_range.0, existing_range_1.1));
-
-                        found_end = true;
-                    } else if is_subrange(*existing_range_1, possible_range) {
-                        deletions.push(existing_range_1.clone());
-                    }
-                }
-
-                if !found_end {
-                    deletions.push(existing_range.clone());
-                    insertions.push(possible_range);
-                }
-                continue
-            }
-
-            if is_within(candidate_range.1, *existing_range) {
-                let mut found_end = false;
-                let possible_range = (candidate_range.0, existing_range.1);
-                is_unique = false;
-
-                for existing_range_1 in self.ranges.iter() {
-                    if is_within(candidate_range.0, *existing_range_1) {
-
-                        deletions.push(existing_range.clone());
-                        deletions.push(existing_range_1.clone());
-                        insertions.push((existing_range_1.0, existing_range.1));
-
-                        found_end = true;
-                    } else if is_subrange(*existing_range_1, possible_range) {
-                        deletions.push(existing_range_1.clone());
-                    }
-                }
-
-                if !found_end {
-                    deletions.push(existing_range.clone());
-                    insertions.push(possible_range);
-                }
-            }
-        }
-
-        if is_unique {
-            insertions.push(candidate_range);
         }
 
         for del in deletions {
             self.ranges.remove(&del);
         }
-        for ins in insertions {
-            self.ranges.insert(ins);
-        }
+        self.ranges.insert(possible_range);
     }
 
     fn len (&self) -> usize {
         return self.ranges.len();
     }
-}
-
-fn condense_ranges (ranges: &Vec<(i64, i64)>) -> HashSet<(i64, i64)> {
-    let mut condensed_ranges: HashSet<(i64, i64)> = HashSet::new();
-
-    for candidate_range in ranges {
-        let mut is_unique = true;
-        let mut deletions = vec![];
-        let mut insertions = vec![];
-
-        for c_range in condensed_ranges.iter() {
-            if is_subrange(*candidate_range, *c_range) {
-                // candidate range is within condensed range
-                // ignore candidate
-                is_unique = false;
-                println!("Candidate range {:?} is wholly within range {:?}", candidate_range, c_range);
-                if insertions.len() > 0 || deletions.len() > 0 {
-                    panic!("oh no");
-                }
-                break
-            }
-
-            if is_subrange(*c_range, *candidate_range) {
-                // condensed range is within candidate range
-                // delete condensed range
-                // insert candidate range
-                deletions.push(c_range.clone());
-                println!("Candidate range {:?} wholly contains range {:?}", candidate_range, c_range);
-                continue;
-            }
-
-            if is_within(candidate_range.0, *c_range) {
-                is_unique = false;
-                let mut found_end = false;
-
-                for c_range_1 in condensed_ranges.iter() {
-                    if is_within(candidate_range.1, *c_range_1) {
-                        println!("Range {:?} overlaps with ranges {:?} and {:?}", candidate_range, c_range, c_range_1);
-
-                        deletions.push(c_range.clone());
-                        deletions.push(c_range_1.clone());
-                        insertions.push((c_range.0, c_range_1.1));
-
-                        found_end = true;
-                    } else if is_subrange(*c_range_1, (c_range.0, candidate_range.1 )) {
-                        deletions.push(c_range_1.clone());
-                    }
-                }
-
-                if !found_end {
-                    deletions.push(c_range.clone());
-                    insertions.push((c_range.0, candidate_range.1));
-                }
-                continue
-            }
-
-            if is_within(candidate_range.1, *c_range) {
-                is_unique = false;
-                let mut found_end = false;
-
-                for c_range_1 in condensed_ranges.iter() {
-                    if is_within(candidate_range.0, *c_range_1) {
-                        println!("Range {:?} overlaps with ranges {:?} and {:?}", candidate_range, c_range_1, c_range);
-
-                        deletions.push(c_range.clone());
-                        deletions.push(c_range_1.clone());
-                        insertions.push((c_range_1.0, c_range.1));
-
-                        found_end = true;
-                    } else if is_subrange(*c_range_1, (candidate_range.0, c_range.1)) {
-                        deletions.push(c_range_1.clone());
-                    }
-                }
-
-                if !found_end {
-                    deletions.push(c_range.clone());
-                    insertions.push((candidate_range.0, c_range.1));
-                }
-                continue
-            }
-        }
-
-        if is_unique {
-            condensed_ranges.insert(*candidate_range);
-        }
-
-        for del in deletions {
-            condensed_ranges.remove(&del);
-        }
-        for ins in insertions {
-            condensed_ranges.insert(ins);
-        }
-
-    }
-    return condensed_ranges;
 }
