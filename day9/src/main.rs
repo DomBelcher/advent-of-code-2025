@@ -5,24 +5,6 @@ use std::iter::FromIterator;
 
 const FILENAME: &str = "./input.txt";
 
-const CORNER_TYPES: [((i32, i32), (i32, i32)); 12] = [
-    ((1, 0), (1, 0)),
-    ((1, 0), (0, 1)),
-    ((1, 0), (0, -1)),
-
-    ((-1, 0), (0, 1)),
-    ((-1, 0), (-1, 0)),
-    ((-1, 0), (0, -1)),
-
-    ((0, 1), (0, 1)),
-    ((0, 1), (-1, 0)),
-    ((0, 1), (1, 0)),
-
-    ((0, -1), (0, -1)),
-    ((0, -1), (-1, 0)),
-    ((0, -1), (1, 0)),
-];
-
 const DIRECTIONS: [(i32, i32); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
 
 fn main() {
@@ -151,7 +133,7 @@ fn main() {
     }
 
     println!("Calculated border in {}ms", start.elapsed().as_millis());
-    println!("{:?}", border);
+    // println!("{:?}", border);
 
     let n_border_coords = border.len();
 
@@ -172,16 +154,7 @@ fn main() {
                 let border_v1 = border[border_idx];
                 let border_v2 = border[(border_idx + 1) % n_border_coords];
 
-                if line_crosses_rect((border_v1, border_v2), &rect) {
-                    all_coloured_tiles = false;
-                    break;
-                }
-            }
-
-            for point in border.iter() {
-                if within_extrema(*point, &rect) {
-                    // println!("Rectangle: {:?} is not allowed", rect);
-                    // println!("contains point {:?}", point);
+                if line_crosses_rect((border_v1, border_v2), &rect) || within_extrema(border_v1, &rect) {
                     all_coloured_tiles = false;
                     break;
                 }
@@ -203,17 +176,6 @@ fn main() {
     println!("Largest rectangle is {:?}", best_rect);
 
     println!("Part 2 ran in {}ms", start.elapsed().as_millis());
-}
-
-fn is_in_rect (point: (i32, i32), corner_1: (i32, i32), corner_2: (i32, i32)) -> bool {
-    let extrema = Extrema {
-        min_x: min(corner_1.0, corner_2.0),
-        min_y: min(corner_1.1, corner_2.1),
-        max_x: max(corner_1.0, corner_2.0),
-        max_y: max(corner_1.1, corner_2.1),
-    };
-
-    return within_extrema(point, &extrema);
 }
 
 fn line_crosses_rect (line: ((i32, i32), (i32, i32)), rect: &Extrema) -> bool {
@@ -251,35 +213,10 @@ fn line_crosses_rect (line: ((i32, i32), (i32, i32)), rect: &Extrema) -> bool {
         }
         return false
     }
-
-    return false
 }
 
 fn next_point (point: (i32, i32), dir: (i32, i32)) -> (i32, i32) {
     return (point.0 + dir.0, point.1 + dir.1);
-}
-
-fn is_interior_point (boundary_set: &HashSet<(i32, i32)>, point: (i32, i32), extrema: Extrema) -> bool {
-    if boundary_set.contains(&point) {
-        return false
-    }
-
-    for dir in DIRECTIONS {
-        let mut ray = point;
-        loop {
-            ray = (ray.0 + dir.0, ray.1 + dir.1);
-
-            if boundary_set.contains(&ray) {
-                break
-            }
-
-            if !within_extrema(ray, &extrema) {
-                return false
-            }
-        }
-    }
-
-    return true
 }
 
 fn within_extrema (point: (i32, i32), extrema: &Extrema) -> bool {
@@ -349,17 +286,3 @@ impl Extrema {
         };
     }
 }
-
-struct Corner {
-    edge1: (i32, i32),
-    edge2: (i32, i32),
-    left_boundary: (i32, i32),
-    right_boundary: (i32, i32)
-}
-
-const CORNER: [Corner; 1] = [ Corner {
-    edge1: (1, 0),
-    edge2: (0, 1),
-    left_boundary: (1, -1),
-    right_boundary: (-1, 1)
-} ];
