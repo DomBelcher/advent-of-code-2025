@@ -145,10 +145,15 @@ fn main() {
 
         for j in (i+1)..n_red_tiles {
             let rt2 = red_tiles[j];
+            let area = ((rt2.0 - rt1.0).abs() as i64 + 1) * ((rt2.1 - rt1.1).abs() as i64 + 1);
 
             let rect = Extrema::from_points(rt1, rt2);
 
             let mut all_coloured_tiles = true;
+
+            if area <= part_2_max_area {
+                continue;
+            }
 
             for border_idx in 0..n_border_coords {
                 let border_v1 = border[border_idx];
@@ -161,13 +166,8 @@ fn main() {
             }
 
             if all_coloured_tiles {
-
-                let area = ((rt2.0 - rt1.0).abs() as i64 + 1) * ((rt2.1 - rt1.1).abs() as i64 + 1);
-
-                if area > part_2_max_area {
-                    best_rect = rect;
-                    part_2_max_area = area;
-                }
+                best_rect = rect;
+                part_2_max_area = area;
             }
         }
     }
