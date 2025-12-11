@@ -4,9 +4,11 @@ use std::i32;
 use std::{collections::HashSet, fs, time::Instant};
 use std::iter::FromIterator;
 
-const FILENAME: &str = "./test_input.txt";
+const FILENAME: &str = "./input.txt";
 const ON_CHAR: char = '#';
 const POWERS_OF_2: [usize; 14] = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
+
+const VERBOSE: bool = false;
 
 fn main() {
     let start = Instant::now();
@@ -25,18 +27,39 @@ fn main() {
         total_presses += ans;
         println!("{}", ans);
 
-        let (mut matrix, mut values) = make_matrix(&machine);
-        let solved_joltage = solve_joltage(&mut matrix, &mut values);
+        let (matrix, values) = make_matrix(&machine);
+        let mut reduced_matrix = matrix.clone();
+        let mut reduced_vals = values.clone();
+        print_matrix(&matrix);
+        // panic!();
+        reduce_matrix(&mut reduced_matrix, &mut reduced_vals);
 
-        if solved_joltage == i32::MAX {
+        println!("matrix representation:");
+        print_matrix(&reduced_matrix);
+        println!("values:");
+        println!("{:?}", reduced_vals);
+        // panic!();
+
+        let max_pushes = max_button_pushes(&machine);
+        println!("Max pushes of each button: {:?}", max_pushes);
+        let solved_joltage = solve_joltage(&mut reduced_matrix, &mut reduced_vals, &max_pushes, *values.iter().max().unwrap());
+        let joltage_answer = solved_joltage.iter().sum::<i32>();
+
+        if !check_joltage_solution(&machine, &solved_joltage) {
+            println!("Solution for machine {} is not valid", machine.raw);
+            println!("solution was {:?}", solved_joltage);
+            panic!();
+        }
+
+        if joltage_answer == i32::MAX {
             println!("failed to solve machine {}", machine.raw);
             println!("matrix representation:");
-            println!("{:?}", matrix);
+            print_matrix(&reduced_matrix);
             println!("values:");
-            println!("{:?}", values);
+            println!("{:?}", reduced_vals);
         }
-        println!("solved joltage: {}", solved_joltage);
-        part_2_presses += solved_joltage;
+        println!("solved joltage: {}", joltage_answer);
+        part_2_presses += joltage_answer;
 
         // println!("max cycles: {}", solve_joltage(&machine) - 1);
     }
@@ -44,6 +67,23 @@ fn main() {
     println!("Total button presses: {}", total_presses);
     println!("Total part 2 presses: {}", part_2_presses);
     println!("Ran in {}ms", start.elapsed().as_millis());
+}
+
+// max number of times for pushing each button
+// pushing the button more than this many times causes an overflow
+fn max_button_pushes (machine: &Machine) -> Vec<i32> {
+// fn max_button_pushes (buttons: &Vec<HashSet<usize>>, joltage_requirements: &Vec<i32>) -> Vec<i32> {
+    let mut max_pushes = vec![i32::MAX; machine.buttons.len()];
+
+    for (button_idx, button) in machine.buttons.iter().enumerate() {
+        for button_val in button {
+            if (machine.joltage_requirements[*button_val] as i32) < max_pushes[button_idx] {
+                max_pushes[button_idx] = machine.joltage_requirements[*button_val] as i32;
+            }
+        }
+    }
+
+    return max_pushes;
 }
 
 fn parse_input () -> Vec<Machine> {
@@ -57,8 +97,35 @@ fn parse_input () -> Vec<Machine> {
     return machines;
 }
 
-fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) -> i32 {
+fn check_joltage_solution(machine: &Machine, button_pushes: &Vec<i32>) -> bool {
+    let mut totals = vec![0; machine.joltage_requirements.len()];
+
+    for (button_idx, button) in machine.buttons.iter().enumerate() {
+        for button_val in button {
+            totals[*button_val] += button_pushes[button_idx];
+        }
+    }
+
+    let mut solved = true;
+    for (idx, val) in machine.joltage_requirements.iter().enumerate() {
+        if totals[idx] != *val as i32 {
+            solved = false
+        }
+    }
+
+    if !solved {
+        println!("requirements:");
+        println!("{:?}", machine.joltage_requirements);
+        println!("my answer:");
+        println!("{:?}", totals);
+    }
+
+    return solved
+}
+
+fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, max_pushes: &Vec<i32>, max_total: i32) -> Vec<i32> {
     let mut best_solution = i32::MAX;
+    let mut best_solution_vars = vec![];
 
     let n_rows = matrix.len();
     let n_cols = matrix[0].len();
@@ -66,11 +133,35 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) -> i32 {
     let mut target_row = None;
     let mut max_vars: i32 = 0;
 
+    let mut improved_max_pushes = max_pushes.clone();
+
     for row_idx in 0..n_rows {
         let var_count = matrix[row_idx].iter().map(|v| v.abs().signum()).sum();
         if var_count > max_vars {
             max_vars = var_count;
             target_row = Some(row_idx)
+        }
+
+        for row_idx in 0..n_rows {
+            let mut all_positive = true;
+            let mut all_negative = true;
+            for col_idx in 0..n_cols {
+                if matrix[row_idx][col_idx] > 0 {
+                    all_negative = false
+                }
+
+                if matrix[row_idx][col_idx] < 0 {
+                    all_positive = false
+                }
+            }
+
+            // if all_positive {
+            for col_idx in 0..n_cols {
+                if matrix[row_idx][col_idx] != 0 && (all_positive || all_negative) {
+                    // improved_max_pushes[col_idx] = min(improved_max_pushes[col_idx], values[row_idx]).abs();
+                }
+            }
+            // }
         }
     }
 
@@ -89,8 +180,9 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) -> i32 {
         }
     }
 
-    let max_val = values[target_row_idx];
+    // let max_val = max(original_vals[target_row_idx], values[target_row_idx]);
     let target_val = values[target_row_idx];
+    let mut max_vals = vec![];
 
     let mut var_indices = vec![];
     let mut coefficients = vec![];
@@ -99,22 +191,44 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) -> i32 {
         if matrix[target_row_idx][col_idx] != 0 {
             var_indices.push(col_idx);
             coefficients.push(matrix[target_row_idx][col_idx]);
+
+            
+            max_vals.push(improved_max_pushes[col_idx]);
         }
     }
+
+    println!("Trying buttons: {:?}", var_indices);
+    println!("Max pushes of each button: {:?}", max_vals);
 
     let slack_var_idx = var_indices.pop().unwrap();
     let slack_coefficient = coefficients.pop().unwrap();
 
-    println!("slack var idx: {}", slack_var_idx);
-    println!("slack coefficient: {}", slack_coefficient);
+    if VERBOSE {
+        println!("slack var idx: {}", slack_var_idx);
+        println!("slack coefficient: {}", slack_coefficient);
+    }
 
     let mut vars_optional = Some(vec![0; n_vars]);
+    let mut n_var_combinations = 0;
+
+    let mut var_combinations = HashSet::new();
 
     loop {
+        n_var_combinations += 1;
         if vars_optional.is_none() {
             break;
         }
         let vars = vars_optional.unwrap();
+        if var_combinations.contains(&vars){
+            println!("Seen vars {:?} before", vars);
+            panic!();
+        }
+        var_combinations.insert(vars.clone());
+
+        let mut verbose_override = false;
+        // if vars[0] == 11 && vars[1] == 5 {
+        //     verbose_override = true
+        // }
         // println!("vars: {:?}", vars);
 
         let mut var_array = vec![0; n_cols];
@@ -124,86 +238,201 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) -> i32 {
             var_array[*var_idx] = vars[idx];
             var_mask[*var_idx] = true;
         }
-        println!("var array: {:?}", var_array);
+        if VERBOSE || verbose_override { println!("var array: {:?}", var_array); }
+        if VERBOSE || verbose_override { println!("var mask: {:?}", var_mask); }
 
         // attempt solution
         let mut sum = 0;
         for var_idx in 0..n_vars {
             sum += vars[var_idx] * coefficients[var_idx];
         }
+        if VERBOSE || verbose_override {
+            println!("sum: {}", sum);
+            println!("target val: {}", target_val);
+        }
 
-        if target_val != 0 && (target_val - sum) != 0 && (target_val - sum).abs() < slack_coefficient.abs() || (target_val - sum).abs() % slack_coefficient.abs() != 0 || (target_val - sum).signum() != slack_coefficient.signum() {
+        if target_val != 0 && (target_val - sum) != 0 && ((target_val - sum).abs() < slack_coefficient.abs() || (target_val - sum).abs() % slack_coefficient.abs() != 0 || (target_val - sum).signum() != slack_coefficient.signum()) {
             // not a solution
-            vars_optional = next_vars(&vars, max_val);
+            vars_optional = next_vars(&vars, &max_vals, max_total);
             continue;
         }
 
         let slack_var = (target_val - sum) / slack_coefficient;
-        println!("slack var: {}", slack_var);
+        if VERBOSE || verbose_override { println!("slack var: {}", slack_var); }
 
         var_array[slack_var_idx] = slack_var;
         var_mask[slack_var_idx] = true;
 
         if var_array.iter().sum::<i32>() > best_solution {
             // won't be the best solution, don't bother solving
-            vars_optional = next_vars(&vars, max_val);
+            vars_optional = next_vars(&vars, &max_vals, max_total);
             continue;
         }
 
         // attempt to solve
         let mut solvable = true;
-        for row_idx in 0..n_rows {
-            if row_idx == target_row_idx {
-                continue;
+        let mut possible_best_solution = true;
+        let mut solved_rows = vec![false; n_rows];
+        solved_rows[target_row_idx] = true;
+        let mut skip = false;
+        let mut new_vars = vars.clone();
+
+        loop {
+            let mut solved_row_count = 0;
+            let mut solvable_row_count = 0;
+
+            for row_idx in 0..n_rows {
+                if !solved_rows[row_idx] && is_row_solvable(&matrix, &var_mask, row_idx) {
+                    if VERBOSE || verbose_override { println!("attempting to solve row: {}", row_idx); }
+                    solvable_row_count += 1;
+                    let row_solvable = solve_for_row(matrix, values, &mut var_array, &mut var_mask, row_idx, verbose_override);
+                    if !row_solvable {
+                        // no way to solve given vars
+                        if VERBOSE || verbose_override { println!("failed to solve row: {}", row_idx); }
+                        solvable = false;
+                        break
+                    }
+
+                    if VERBOSE || verbose_override {
+                        println!("solved row");
+                        println!("new vars: {:?}", var_array);
+                        println!("new var mask: {:?}", var_mask );
+                    }
+
+                    solved_rows[row_idx] = true;
+                    solved_row_count += 1;
+
+                    if var_array.iter().sum::<i32>() > best_solution {
+                        // won't be the best solution, don't bother solving
+                        if VERBOSE || verbose_override  { println!("no longer the best solution"); }
+                        possible_best_solution = false;
+                        break;
+                    }
+                }
             }
-            println!("attempting to solve row: {}", row_idx);
+            
+            if solvable_row_count == 0 && !var_mask.iter().all(|m| *m) {
+                let mut unsolved_var_idx = 0;
+                for row_idx in 0..n_rows {
+                    if !var_mask[row_idx] {
+                        unsolved_var_idx = row_idx;
+                        break;
+                    }
+                }
+                if !var_indices.contains(&unsolved_var_idx) {
+                    // println!("current vars")
+                    println!("Attempting to solve with additional variable: {} | max val {}", unsolved_var_idx, improved_max_pushes[unsolved_var_idx]);
+                    max_vals.push(improved_max_pushes[unsolved_var_idx]);
+                    var_indices.push(unsolved_var_idx);
 
-            solvable &= solve_for_row(matrix, values, &mut var_array, &mut var_mask, row_idx);
-            if !solvable {
-                break
+                    new_vars.push(0);
+                    skip = true;
+
+                    break;
+                }
             }
 
-            println!("solved row");
-            println!("new vars: {:?}", var_array);
-            println!("new var mask: {:?}", var_mask );
+            if solved_rows.iter().all(|m| *m) {
+                break;
+            }
 
-            if var_array.iter().sum::<i32>() > best_solution {
-                // won't be the best solution, don't bother solving
+            // can't solve, won't be the best solution, or there are no solvable rows
+            if !solvable || !possible_best_solution || solvable_row_count == 0 {
                 solvable = false;
                 break;
             }
         }
 
-        if !solvable {
-            vars_optional = next_vars(&vars, max_val);
+        if var_mask.iter().all(|m| *m) && solvable {
+            if VERBOSE || verbose_override {
+                println!("Possible solution:");
+                println!("{:?}", var_array);
+            }
+            // panic!();
+            if var_array.iter().sum::<i32>() < best_solution {
+                best_solution = var_array.iter().sum::<i32>();
+                best_solution_vars = var_array;
+            }
+            vars_optional = next_vars(&vars, &max_vals, max_total);
             continue;
         }
 
-        if var_array.iter().sum::<i32>() < best_solution {
-            println!("Possible solution:");
-            println!("{:?}", var_array);
-            best_solution = var_array.iter().sum::<i32>();
+        if skip {
+            vars_optional = next_vars(&new_vars, &max_vals, max_total);
+            continue;
         }
 
-        vars_optional = next_vars(&vars, max_val);
+        if !solvable {
+            // if vars[0] == 24 && vars[1] == 2 && vars[2] == 7 {
+            //     println!("var array: {:?}", var_array);
+            //     println!("var mask: {:?}", var_mask);
+
+            //     panic!()
+            // }
+            vars_optional = next_vars(&vars, &max_vals, max_total);
+            continue;
+        }
+
+        // if var_array.iter().sum::<i32>() < best_solution {
+        //     if VERBOSE {
+        //         println!("Possible solution:");
+        //         println!("{:?}", var_array);
+        //     }
+        //     best_solution = var_array.iter().sum::<i32>();
+        //     best_solution_vars = var_array;
+        // }
+
+        // if vars[0] == 24 && vars[1] == 2 && vars[2] == 7 {
+        //     panic!()
+        // }
+
+        vars_optional = next_vars(&vars, &max_vals, max_total);
     }
 
 
-    return best_solution;
+    println!("Best solution: {}", best_solution);
+    println!("Best vars: {:?}", best_solution_vars);
+    println!("Tried {} var combinations", n_var_combinations);
+    return best_solution_vars;
 }
 
-fn solve_for_row (matrix: &Vec<Vec<i32>>, values: &Vec<i32>, var_array: &mut Vec<i32>, var_mask: &mut Vec<bool>, row_idx: usize) -> bool {
+fn is_row_solvable (matrix: &Vec<Vec<i32>>, var_mask: &Vec<bool>, row_idx: usize) -> bool {
+    let n_cols = matrix[row_idx].len();
+    let mut n_slack_vars = 0;
+
+    for col_idx in 0..n_cols {
+        if !var_mask[col_idx] && matrix[row_idx][col_idx] != 0 {
+            n_slack_vars += 1;
+        }
+    }
+
+    return n_slack_vars <= 1;
+}
+
+fn solve_for_row (matrix: &Vec<Vec<i32>>, values: &Vec<i32>, var_array: &mut Vec<i32>, var_mask: &mut Vec<bool>, row_idx: usize, verbose_override: bool) -> bool {
     let n_cols = matrix[row_idx].len();
     let target_val = values[row_idx];
 
-    if target_val == 0 {
-        for col_idx in 0..n_cols {
-            if matrix[row_idx][col_idx] != 0 {
-                var_mask[col_idx] = true;
-            }
-        }
-        return true
+    
+    if VERBOSE || verbose_override {
+        println!("Solving for row: {}", row_idx);
+        println!("Matrix:");
+        print_matrix(matrix);
+        println!("values:");
+        println!("{:?}", values);
+        println!("vars:");
+        println!("{:?}", var_array);
+        println!("Target val: {}", target_val);
     }
+
+    // if target_val == 0 {
+    //     for col_idx in 0..n_cols {
+    //         if matrix[row_idx][col_idx] != 0 {
+    //             var_mask[col_idx] = true;
+    //         }
+    //     }
+    //     return true
+    // }
 
     let mut already_solved = true;
     let mut sum = 0;
@@ -220,11 +449,15 @@ fn solve_for_row (matrix: &Vec<Vec<i32>>, values: &Vec<i32>, var_array: &mut Vec
         }
         sum += matrix[row_idx][col_idx] * var_array[col_idx];
     }
+    if VERBOSE || verbose_override { println!("Already solved: {}", already_solved);  }
+    if VERBOSE || verbose_override { println!("Sum: {}", sum);  }
+
     if already_solved && sum == target_val {
         // row is already solved with other variables
         return true
     } else if already_solved && sum != target_val {
         // solution isn't consistent
+        if VERBOSE || verbose_override { println!("inconsistent solution: sum is {}, target is {}", sum, target_val); }
         return false
     }
     // not already solved, need to solve row
@@ -234,21 +467,27 @@ fn solve_for_row (matrix: &Vec<Vec<i32>>, values: &Vec<i32>, var_array: &mut Vec
         return true
     }
 
+    let numerator = (target_val - sum);
+    // let denominator = slack_coefficient;
+
     // find slack var
-    if (target_val - sum).abs() < slack_coefficient.abs() || (target_val - sum).abs() % slack_coefficient.abs() != 0 || (target_val - sum).signum() != slack_coefficient.signum() {
+    if numerator.abs() < slack_coefficient.abs() || numerator.abs() % slack_coefficient.abs() != 0 || numerator.signum() != slack_coefficient.signum() {
+        if VERBOSE || verbose_override { println!("solution is not valid: numerator is {}, denominator is {}", numerator, slack_coefficient); }
         // unable to solve, does not divide into whole number
         return false
     }
 
+    if VERBOSE || verbose_override { println!("solution found: {}", numerator / slack_coefficient); }
+
     // solution found
-    var_array[slack_var_idx] = (target_val - sum) / slack_coefficient;
+    var_array[slack_var_idx] = numerator / slack_coefficient;
     var_mask[slack_var_idx] = true;
 
     return true;
 }
 
 
-fn next_vars (vars: &Vec<i32>, max_val: i32) -> Option<Vec<i32>> {
+fn next_vars (vars: &Vec<i32>, max_vals: &Vec<i32>, max_total: i32) -> Option<Vec<i32>> {
     let n_vars = vars.len();
     // if vars.len() == 0 || vars.iter().sum::<i32>() == max_val * n_vars as i32 {
     //     return None
@@ -257,8 +496,8 @@ fn next_vars (vars: &Vec<i32>, max_val: i32) -> Option<Vec<i32>> {
         return None
     }
 
-    if vars[n_vars - 1] == max_val {
-        let new_vars = next_vars(&vars[0..(n_vars-1)].to_vec(), max_val);
+    if vars[n_vars - 1] == max_vals[n_vars - 1] {
+        let new_vars = next_vars(&vars[0..(n_vars-1)].to_vec(), &max_vals[0..(n_vars-1)].to_vec(), max_total);
         if new_vars.is_none() {
             return None
         }
@@ -269,6 +508,10 @@ fn next_vars (vars: &Vec<i32>, max_val: i32) -> Option<Vec<i32>> {
 
     let mut new_vars = vars.clone();
     new_vars[n_vars - 1] += 1;
+
+    // if new_vars.iter().sum::<i32>() > max_total {
+    //     return next_vars(&new_vars, max_vals, max_total);
+    // }
 
     return Some(new_vars);
 }
@@ -291,12 +534,12 @@ fn make_matrix (machine: &Machine) -> (Vec<Vec<i32>>, Vec<i32>) {
     }
 
     println!("Max before reducing: {}", joltage_buttons.iter().max().unwrap());
-    reduce_matrix(&mut matrix, &mut values);
+    // reduce_matrix(&mut matrix, &mut values);
 
 
-    println!("reduced to:");
-    println!("{:?}", matrix);
-    println!("{:?}", values);
+    // println!("reduced to:");
+    // println!("{:?}", matrix);
+    // println!("{:?}", values);
 
     // let max_incrementers = joltage_buttons.iter().max().unwrap();
 
@@ -314,14 +557,30 @@ fn make_matrix (machine: &Machine) -> (Vec<Vec<i32>>, Vec<i32>) {
     return (matrix, values)
 }
 
+
 fn reduce_matrix (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) {
+    return do_reduction(matrix, values, 0);
+}
+
+
+fn do_reduction (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, col_counter: usize) {
     let n_rows = matrix.len();
     let n_cols = matrix[0].len();
-    println!("{:?}", matrix);
-    println!("{:?}", values);
+
+    if col_counter == n_cols {
+        // reduced on every column
+        return;
+    }
+
+
+    if VERBOSE {
+        println!("Current matrix:");
+        print_matrix(&matrix);
+        println!("{:?}", values);
+    }
 
     let mut target_col = None;
-    for i in 0..n_cols {
+    for i in col_counter..n_cols {
         let col_count = count_column(matrix, i);
         if col_count == 0 {
         } else if col_count > 1 {
@@ -336,42 +595,58 @@ fn reduce_matrix (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) {
         // done
     }
     let col_idx = target_col.unwrap();
-    println!("targeting column {}", col_idx);
+    if VERBOSE { println!("targeting column {}", col_idx); }
 
-    let source_row = find_source_row(&matrix, col_idx);
-    if source_row.is_none() {
-        return
+    let pivot_rows = find_source_and_target_row(&matrix, col_idx);
+    if pivot_rows.is_none() {
+        // not possible to pivot on this column
+        // try next col
+        return do_reduction(matrix, values, col_counter + 1);
     }
-    let source_row_idx = source_row.unwrap();
-    println!("sourcing from row {}", source_row_idx);
+    let (source_row_idx, target_row_idx) = pivot_rows.unwrap();
 
-    let mut target_row = None;
-    for row_idx in 0..n_rows {
-        if row_idx == source_row_idx {
-            continue;
-        }
+    // let mut source_row = find_source_row(&matrix, col_idx, &ignore_rows);
+    // if source_row.is_none() {
+    //     // unable to find source row to reduce on
+    //     // try next column
+    //     return do_reduction(matrix, values, col_counter + 1, vec![]);
+    // }
+    // let mut source_row_idx = source_row.unwrap();
+    // if VERBOSE { println!("attempting to source from row {}", source_row_idx); }
 
-        if matrix[source_row_idx][col_idx].abs() > matrix[row_idx][col_idx].abs() {
-            continue;
-        }
+    // let mut target_row = None;
+    // for row_idx in 0..n_rows {
+    //     if row_idx == source_row_idx {
+    //         continue;
+    //     }
 
-        if matrix[row_idx][col_idx] != 0 {
-            target_row = Some(row_idx);
-            break
-        }
-    }
+    //     if matrix[source_row_idx][col_idx].abs() > matrix[row_idx][col_idx].abs() {
+    //         // won't be able to reduce on this row
+    //         let mut new_ignores: Vec<usize> = ignore_rows.clone();
+    //         new_ignores.push(source_row_idx);
+    //         return do_reduction(matrix, values, col_counter, new_ignores);
+    //     }
 
-    if target_row.is_none() {
-        return
-    }
-    let target_row_idx = target_row.unwrap();
-    println!("targeting row {}", target_row_idx);
+    //     if matrix[row_idx][col_idx] != 0 {
+    //         target_row = Some(row_idx);
+    //         break
+    //     }
+    // }
+    if VERBOSE { println!("sourcing from row {}", source_row_idx); }
+
+    // if target_row.is_none() {
+    //     // unable to find target row to reduce on
+    //     // try next column
+    //     return do_reduction(matrix, values, col_counter + 1, vec![]);
+    // }
+    // let target_row_idx = target_row.unwrap();
+    if VERBOSE { println!("targeting row {}", target_row_idx); }
 
     let sign = matrix[target_row_idx][col_idx].signum() * matrix[source_row_idx][col_idx].signum();
     if sign == 0 {
         panic!("zero sign")
     }
-    println!("sign is {}", sign);
+    if VERBOSE { println!("sign is {}", sign); }
 
     // subtract source row from target row
     for col in 0..n_cols {
@@ -380,7 +655,7 @@ fn reduce_matrix (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) {
     values[target_row_idx] -= values[source_row_idx] * sign;
     scale_row(matrix, values, target_row_idx);
 
-    return reduce_matrix(matrix, values);
+    return do_reduction(matrix, values, col_counter);
 }
 
 fn scale_row (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, row_idx: usize) {
@@ -396,6 +671,7 @@ fn scale_row (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, row_idx: usize)
         let mut is_cd = true;
 
         if values[row_idx].abs() % possible_gcd != 0 {
+            is_cd = false;
             continue;
         }
 
@@ -414,7 +690,7 @@ fn scale_row (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, row_idx: usize)
         return
     }
 
-    // println!("Scaling row {} by factor of {}", row_idx, gcd);
+    if VERBOSE { println!("Scaling row {} by factor of {}", row_idx, gcd); }
 
     for col_idx in 0..n_cols {
         // let val = matrix[row_idx][col_idx];
@@ -426,11 +702,43 @@ fn scale_row (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, row_idx: usize)
     return
 }
 
-fn find_source_row (matrix: &Vec<Vec<i32>>, col_idx: usize) -> Option<usize> {
+fn find_source_and_target_row (matrix: &Vec<Vec<i32>>, col_idx: usize) -> Option<(usize, usize)> {
+    let n_rows = matrix.len();
+
+    for source_row_idx in 0..n_rows {
+        if matrix[source_row_idx][col_idx] == 0 {
+            continue;
+        }
+
+        let mut valid_source = true;
+        for c in 0..col_idx {
+            if matrix[source_row_idx][c] != 0 {
+                valid_source = false;
+                break
+            }
+        }
+
+        if valid_source {
+            for target_row_idx in 0..n_rows {
+                if matrix[target_row_idx][col_idx] == 0 {
+                    continue;
+                }
+
+                if source_row_idx != target_row_idx && !(matrix[source_row_idx][col_idx].abs() > matrix[target_row_idx][col_idx].abs()) {
+                    return Some((source_row_idx, target_row_idx));
+                }
+            }
+        }
+    }
+
+    return None
+}
+
+fn find_source_row (matrix: &Vec<Vec<i32>>, col_idx: usize, ignore_rows: &Vec<usize>) -> Option<usize> {
     let n_rows = matrix.len();
 
     for row_idx in 0..n_rows {
-        if matrix[row_idx][col_idx] == 0 {
+        if matrix[row_idx][col_idx] == 0 || ignore_rows.contains(&row_idx) || matrix[row_idx][col_idx].abs() > matrix[row_idx][col_idx].abs(){
             continue;
         }
 
@@ -604,3 +912,9 @@ fn parse_joltage (joltage_str: &str) -> Option<Vec<usize>> {
 // fn ham_weight(x: &[u8]) -> u64 {
 //     x.iter().fold(0, |a, b| a + b.count_ones() as u64)
 // }
+
+fn print_matrix (matrix: &Vec<Vec<i32>>) {
+    for row in matrix.iter() {
+        println!("{:?}", row);
+    }
+}
