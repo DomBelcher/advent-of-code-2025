@@ -1,8 +1,11 @@
+// this code is terrible
+// it took a whole day to write
+// but it did get me the right answer
+// eventually
+
 use std::cmp::{max, min};
-use std::env::var;
 use std::i32;
 use std::{collections::HashSet, fs, time::Instant};
-use std::iter::FromIterator;
 
 const FILENAME: &str = "./input.txt";
 const ON_CHAR: char = '#';
@@ -158,7 +161,7 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, max_pushes:
             // if all_positive {
             for col_idx in 0..n_cols {
                 if matrix[row_idx][col_idx] != 0 && (all_positive || all_negative) {
-                    // improved_max_pushes[col_idx] = min(improved_max_pushes[col_idx], values[row_idx]).abs();
+                    improved_max_pushes[col_idx] = min(improved_max_pushes[col_idx], values[row_idx]).abs();
                 }
             }
             // }
@@ -211,7 +214,7 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, max_pushes:
     let mut vars_optional = Some(vec![0; n_vars]);
     let mut n_var_combinations = 0;
 
-    let mut var_combinations = HashSet::new();
+    // let mut var_combinations = HashSet::new();
 
     loop {
         n_var_combinations += 1;
@@ -219,11 +222,6 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, max_pushes:
             break;
         }
         let vars = vars_optional.unwrap();
-        if var_combinations.contains(&vars){
-            println!("Seen vars {:?} before", vars);
-            panic!();
-        }
-        var_combinations.insert(vars.clone());
 
         let mut verbose_override = false;
         // if vars[0] == 11 && vars[1] == 5 {
@@ -363,28 +361,9 @@ fn solve_joltage (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, max_pushes:
         }
 
         if !solvable {
-            // if vars[0] == 24 && vars[1] == 2 && vars[2] == 7 {
-            //     println!("var array: {:?}", var_array);
-            //     println!("var mask: {:?}", var_mask);
-
-            //     panic!()
-            // }
             vars_optional = next_vars(&vars, &max_vals, max_total);
             continue;
         }
-
-        // if var_array.iter().sum::<i32>() < best_solution {
-        //     if VERBOSE {
-        //         println!("Possible solution:");
-        //         println!("{:?}", var_array);
-        //     }
-        //     best_solution = var_array.iter().sum::<i32>();
-        //     best_solution_vars = var_array;
-        // }
-
-        // if vars[0] == 24 && vars[1] == 2 && vars[2] == 7 {
-        //     panic!()
-        // }
 
         vars_optional = next_vars(&vars, &max_vals, max_total);
     }
@@ -424,15 +403,6 @@ fn solve_for_row (matrix: &Vec<Vec<i32>>, values: &Vec<i32>, var_array: &mut Vec
         println!("{:?}", var_array);
         println!("Target val: {}", target_val);
     }
-
-    // if target_val == 0 {
-    //     for col_idx in 0..n_cols {
-    //         if matrix[row_idx][col_idx] != 0 {
-    //             var_mask[col_idx] = true;
-    //         }
-    //     }
-    //     return true
-    // }
 
     let mut already_solved = true;
     let mut sum = 0;
@@ -489,9 +459,7 @@ fn solve_for_row (matrix: &Vec<Vec<i32>>, values: &Vec<i32>, var_array: &mut Vec
 
 fn next_vars (vars: &Vec<i32>, max_vals: &Vec<i32>, max_total: i32) -> Option<Vec<i32>> {
     let n_vars = vars.len();
-    // if vars.len() == 0 || vars.iter().sum::<i32>() == max_val * n_vars as i32 {
-    //     return None
-    // }
+
     if vars.len() == 0 {
         return None
     }
@@ -508,10 +476,6 @@ fn next_vars (vars: &Vec<i32>, max_vals: &Vec<i32>, max_total: i32) -> Option<Ve
 
     let mut new_vars = vars.clone();
     new_vars[n_vars - 1] += 1;
-
-    // if new_vars.iter().sum::<i32>() > max_total {
-    //     return next_vars(&new_vars, max_vals, max_total);
-    // }
 
     return Some(new_vars);
 }
@@ -534,25 +498,6 @@ fn make_matrix (machine: &Machine) -> (Vec<Vec<i32>>, Vec<i32>) {
     }
 
     println!("Max before reducing: {}", joltage_buttons.iter().max().unwrap());
-    // reduce_matrix(&mut matrix, &mut values);
-
-
-    // println!("reduced to:");
-    // println!("{:?}", matrix);
-    // println!("{:?}", values);
-
-    // let max_incrementers = joltage_buttons.iter().max().unwrap();
-
-    // let mut reduced_joltage_buttons = vec![0_u32; n_joltage_levels];
-    // for button_idx in 0..n_buttons {
-    //     for joltage_idx in 0..n_joltage_levels {
-    //         if matrix[joltage_idx][button_idx] != 0 {
-    //             reduced_joltage_buttons[joltage_idx] += 1;
-    //         }
-    //         matrix[joltage_idx][button_idx] = 1;
-    //     }
-    // }
-    // println!("Max after reducing: {}", reduced_joltage_buttons.iter().max().unwrap());
 
     return (matrix, values)
 }
@@ -604,42 +549,7 @@ fn do_reduction (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, col_counter:
         return do_reduction(matrix, values, col_counter + 1);
     }
     let (source_row_idx, target_row_idx) = pivot_rows.unwrap();
-
-    // let mut source_row = find_source_row(&matrix, col_idx, &ignore_rows);
-    // if source_row.is_none() {
-    //     // unable to find source row to reduce on
-    //     // try next column
-    //     return do_reduction(matrix, values, col_counter + 1, vec![]);
-    // }
-    // let mut source_row_idx = source_row.unwrap();
-    // if VERBOSE { println!("attempting to source from row {}", source_row_idx); }
-
-    // let mut target_row = None;
-    // for row_idx in 0..n_rows {
-    //     if row_idx == source_row_idx {
-    //         continue;
-    //     }
-
-    //     if matrix[source_row_idx][col_idx].abs() > matrix[row_idx][col_idx].abs() {
-    //         // won't be able to reduce on this row
-    //         let mut new_ignores: Vec<usize> = ignore_rows.clone();
-    //         new_ignores.push(source_row_idx);
-    //         return do_reduction(matrix, values, col_counter, new_ignores);
-    //     }
-
-    //     if matrix[row_idx][col_idx] != 0 {
-    //         target_row = Some(row_idx);
-    //         break
-    //     }
-    // }
     if VERBOSE { println!("sourcing from row {}", source_row_idx); }
-
-    // if target_row.is_none() {
-    //     // unable to find target row to reduce on
-    //     // try next column
-    //     return do_reduction(matrix, values, col_counter + 1, vec![]);
-    // }
-    // let target_row_idx = target_row.unwrap();
     if VERBOSE { println!("targeting row {}", target_row_idx); }
 
     let sign = matrix[target_row_idx][col_idx].signum() * matrix[source_row_idx][col_idx].signum();
@@ -693,8 +603,6 @@ fn scale_row (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, row_idx: usize)
     if VERBOSE { println!("Scaling row {} by factor of {}", row_idx, gcd); }
 
     for col_idx in 0..n_cols {
-        // let val = matrix[row_idx][col_idx];
-        // let sign = val.signum();
         matrix[row_idx][col_idx] /= gcd;
     }
     values[row_idx] /= gcd;
@@ -734,30 +642,6 @@ fn find_source_and_target_row (matrix: &Vec<Vec<i32>>, col_idx: usize) -> Option
     return None
 }
 
-fn find_source_row (matrix: &Vec<Vec<i32>>, col_idx: usize, ignore_rows: &Vec<usize>) -> Option<usize> {
-    let n_rows = matrix.len();
-
-    for row_idx in 0..n_rows {
-        if matrix[row_idx][col_idx] == 0 || ignore_rows.contains(&row_idx) || matrix[row_idx][col_idx].abs() > matrix[row_idx][col_idx].abs(){
-            continue;
-        }
-
-        let mut valid = true;
-        for c in 0..col_idx {
-            if matrix[row_idx][c] != 0 {
-                valid = false;
-                break
-            }
-        }
-
-        if valid {
-            return Some(row_idx);
-        }
-    }
-
-    return None
-}
-
 fn count_column (matrix: &Vec<Vec<i32>>, col_idx: usize) -> usize {
     let n_rows = matrix.len();
 
@@ -783,22 +667,12 @@ fn solve_machine (machine: &Machine) -> u32 {
         let mut sum = 0;
 
         for (idx, bin) in machine.buttons_binary.iter().enumerate() {
-            // println!("binary: {} | mask: {} | bitwise and: {}", bin, mask, *bin & mask);
             if POWERS_OF_2[idx] & mask > 0 {
-                // println!("Pressing button {}", bin);
                 sum ^= *bin;
             }
-            // sum ^= *bin & mask;
         }
 
-        // println!("mask: {}, target: {}, sum: {}", mask, machine.start_config_binary, sum);
-
         let button_presses = mask.count_ones();
-
-        // if button_presses != n_buttons_presses {
-        //     println!("counted {} button presses, mask is {}, one_count is {}", n_buttons_presses, mask, button_presses);
-        //     panic!()
-        // }
 
         if sum == machine.start_config_binary && button_presses < min_buttons {
             min_buttons = button_presses;
@@ -908,10 +782,6 @@ fn parse_joltage (joltage_str: &str) -> Option<Vec<usize>> {
 
     return Some(joltage)
 }
-
-// fn ham_weight(x: &[u8]) -> u64 {
-//     x.iter().fold(0, |a, b| a + b.count_ones() as u64)
-// }
 
 fn print_matrix (matrix: &Vec<Vec<i32>>) {
     for row in matrix.iter() {
