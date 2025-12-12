@@ -3,7 +3,7 @@
 // but it did get me the right answer
 // eventually
 
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::i32;
 use std::{collections::HashSet, fs, time::Instant};
 

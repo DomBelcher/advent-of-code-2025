@@ -1,6 +1,5 @@
 use std::fmt::{Debug, Formatter};
 
-
 const VERBOSE: bool = false;
 
 
@@ -30,7 +29,6 @@ pub fn reduce_matrix (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>) {
 
 
 fn do_reduction (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, col_idx: usize) {
-    let n_rows = matrix.len();
     let n_cols = matrix[0].len();
 
     if col_idx == n_cols {
@@ -38,29 +36,12 @@ fn do_reduction (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, col_idx: usi
         return;
     }
 
-
     if VERBOSE {
         println!("Current matrix:");
         print_matrix(&matrix);
         println!("{:?}", values);
     }
 
-    // let mut target_col = None;
-    // for i in col_counter..n_cols {
-    //     let col_count = count_column(matrix, i);
-    //     if col_count == 0 {
-    //     } else if col_count > 1 {
-    //         target_col = Some(i);
-    //         break;
-    //     }
-    // }
-
-
-    // if target_col.is_none() {
-    //     return
-    //     // done
-    // }
-    // let col_idx = target_col.unwrap();
     if VERBOSE { println!("targeting column {}", col_idx); }
 
     let pivot_rows = find_source_and_target_row(&matrix, col_idx);
@@ -79,33 +60,54 @@ fn do_reduction (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, col_idx: usi
     }
     if VERBOSE { println!("sign is {}", sign); }
 
+    if VERBOSE {
+        println!("Scaling:");
+        println!("before scaling");
+        print_matrix(matrix);
+    }
+
+    let source_scale_factor = matrix[source_row_idx][col_idx];
+    let target_scale_factor =  matrix[target_row_idx][col_idx];
+
+    scale_row_by(matrix, values, source_row_idx, target_scale_factor);
+    scale_row_by(matrix, values, target_row_idx, source_scale_factor);
+
+    if VERBOSE {
+        println!("after scaling");
+        print_matrix(matrix);
+    }
+
     // subtract source row from target row
     for col in 0..n_cols {
-        matrix[target_row_idx][col] -= matrix[source_row_idx][col] * sign;
+        matrix[target_row_idx][col] -= matrix[source_row_idx][col];
     }
-    values[target_row_idx] -= values[source_row_idx] * sign;
+    values[target_row_idx] -= values[source_row_idx];
+    scale_row(matrix, values, source_row_idx);
     scale_row(matrix, values, target_row_idx);
 
     return do_reduction(matrix, values, col_idx);
 }
 
-
-fn count_column (matrix: &Vec<Vec<i32>>, col_idx: usize) -> usize {
-    let n_rows = matrix.len();
-
-    let mut count = 0;
-    for i in 0..n_rows {
-        if matrix[i][col_idx] != 0 {
-            count += 1;
-        }
+fn scale_row_by(matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, row_idx: usize, scale_factor: i32) {
+    if VERBOSE { println!("Scaling row {} by factor of {}", row_idx, scale_factor) }
+    let n_cols = matrix[row_idx].len();
+    for col_idx in 0..n_cols {
+        matrix[row_idx][col_idx] *= scale_factor;
     }
-
-    return count
+    values[row_idx] *= scale_factor;
+    return
 }
 
 fn scale_row (matrix: &mut Vec<Vec<i32>>, values: &mut Vec<i32>, row_idx: usize) {
     let n_cols = matrix[row_idx].len();
     let mut gcd = 1;
+
+    if matrix[row_idx].iter().all(|v| *v <= 0) {
+        // values all negative
+        // make positive before finding gcd
+        scale_row_by(matrix, values, row_idx, -1);
+    }
+
     let min_val = matrix[row_idx].iter().filter(|v| **v != 0).map(|v| v.abs()).min().unwrap_or(1);
 
     if min_val == 1 {
@@ -167,8 +169,8 @@ fn find_source_and_target_row (matrix: &Vec<Vec<i32>>, col_idx: usize) -> Option
                     continue;
                 }
 
-                if source_row_idx != target_row_idx && !(matrix[source_row_idx][col_idx].abs() > matrix[target_row_idx][col_idx].abs()) {
-                    return Some((source_row_idx, target_row_idx));
+                if source_row_idx != target_row_idx {
+                    return Some((source_row_idx, target_row_idx))
                 }
             }
         }
